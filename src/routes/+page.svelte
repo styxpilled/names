@@ -21,7 +21,14 @@
 			key: keyof Person;
 		};
 	};
-	type Filter = SortFilter | LimitFilter;
+	type ExcludeFilter = {
+		type: 'exclude';
+		filter: { type: 'letter' | 'prefix' | 'suffix'; value: '' };
+	};
+	type ShuffleFilter = {
+		type: 'shuffle';
+	};
+	type Filter = SortFilter | LimitFilter | ExcludeFilter | ShuffleFilter;
 
 	// url-encoded filters loaded in +page.ts
 	export let data: PageData;
@@ -43,7 +50,7 @@
 	 * @param node passed automatically to function by Svelte's use directive
 	 * @param config
 	 */
-	const debounce = <T extends ('asc' | 'desc') | number>(
+	const debounce = <T extends ('asc' | 'desc') | string | number>(
 		node: Node,
 		config: { delay?: number; type?: T; callback: (s: T) => void }
 	) => {
@@ -75,8 +82,27 @@
 	 * so we need this helper to assert that value is a `LimitHelper`
 	 * @param value
 	 */
-	const isLimitFilter = (value: LimitFilter | SortFilter): value is LimitFilter => {
-		return value.type === 'limit';
+	const filter = {
+		isLimit: (value: Filter): value is LimitFilter => {
+			return value.type === 'limit';
+		},
+		isExclude: (value: Filter): value is ExcludeFilter => {
+			return value.type === 'exclude';
+		},
+		isSort: (value: Filter): value is SortFilter => {
+			return value.type === 'sort';
+		}
+	};
+
+	const shuffle = (a: any[]) => {
+		let j, x, i;
+		for (i = a.length - 1; i > 0; i--) {
+			j = Math.floor(Math.random() * (i + 1));
+			x = a[i];
+			a[i] = a[j];
+			a[j] = x;
+		}
+		return a;
 	};
 
 	/**
@@ -85,25 +111,53 @@
 	 * mutation through methods like `push()`.
 	 */
 	const addFilter = () => {
-		filters.push(
-			newFilter.endsWith('limit')
-				? {
-						type: 'limit',
-						filter: {
-							// Remove the limit | sort suffix
-							key: newFilter.replace(' limit', '') as keyof Person,
-							max: 100,
-							min: 0
-						}
-				  }
-				: {
-						type: 'sort',
-						filter: {
-							key: newFilter.replace(' sort', '') as keyof Person,
-							order: 'asc'
-						}
-				  }
-		);
+		if (newFilter.endsWith('limit')) {
+			filters.push({
+				type: 'limit',
+				filter: {
+					// Remove the limit | sort suffix
+					key: newFilter.replace(' limit', '') as keyof Person,
+					max: 100,
+					min: 0
+				}
+			});
+		} else if (newFilter.endsWith('sort')) {
+			filters.push({
+				type: 'sort',
+				filter: {
+					key: newFilter.replace(' sort', '') as keyof Person,
+					order: 'asc'
+				}
+			});
+		} else if (newFilter === 'exclude letters') {
+			filters.push({
+				type: 'exclude',
+				filter: {
+					type: 'letter',
+					value: ''
+				}
+			});
+		} else if (newFilter === 'exclude prefixes') {
+			filters.push({
+				type: 'exclude',
+				filter: {
+					type: 'prefix',
+					value: ''
+				}
+			});
+		} else if (newFilter === 'exclude suffixes') {
+			filters.push({
+				type: 'exclude',
+				filter: {
+					type: 'suffix',
+					value: ''
+				}
+			});
+		} else if (newFilter === 'shuffle') {
+			filters.push({
+				type: 'shuffle'
+			});
+		}
 		filters = filters;
 	};
 
@@ -117,38 +171,59 @@
 	 */
 	$: {
 		// We rebuild the regex from the query
-		const regex = new RegExp(query.toLowerCase());
+		const regex = new RegExp(query, 'i');
 		// And filter the dataset
-		filtered = dataset.data.filter((val) => val.value.toLowerCase().match(regex));
+		filtered = dataset.data.filter((val) => val.value.match(regex));
 
 		filters.forEach((filter) => {
-			// All filters work exclusively on numbers
-			if (filter.type === 'limit')
-				// Filter numbers so that `max > n > min`
-				filtered = filtered.filter(
-					(val) =>
-						filter.filter.min < val[filter.filter.key] && val[filter.filter.key] < filter.filter.max
-				);
-			// Basic ascending // descending numeric sort
-			else
-				filtered = filtered.sort((a, b) => {
-					if (filter.filter.order === 'asc') {
-						return (a[filter.filter.key] as number) - (b[filter.filter.key] as number);
+			switch (filter.type) {
+				case 'limit':
+					if (filter.type === 'limit')
+						// Filter numbers so that `max > n > min`
+						filtered = filtered.filter(
+							(val) =>
+								filter.filter.min < val[filter.filter.key] &&
+								val[filter.filter.key] < filter.filter.max
+						);
+					break;
+				case 'sort':
+					filtered = filtered.sort((a, b) => {
+						if (filter.filter.order === 'asc')
+							return (a[filter.filter.key] as number) - (b[filter.filter.key] as number);
+						return (b[filter.filter.key] as number) - (a[filter.filter.key] as number);
+					});
+					break;
+				case 'exclude':
+					if (filter.filter.value === '') break;
+					if (filter.filter.type === 'letter') {
+						const regex = new RegExp(`^[^${filter.filter.value}]+$`, 'i');
+						filtered = filtered.filter((val) => regex.test(val.value));
+					} else if (filter.filter.type === 'prefix') {
+						filtered = filtered.filter((val) => !val.value.startsWith(filter.filter.value));
+					} else if (filter.filter.type === 'suffix') {
+						filtered = filtered.filter((val) => !val.value.endsWith(filter.filter.value));
 					}
-					return (b[filter.filter.key] as number) - (a[filter.filter.key] as number);
-				});
+					break;
+				case 'shuffle':
+					filtered = shuffle(filtered);
+					break;
+			}
 		});
 
 		/** Wacky SvelteKit behaviour - this will try to run on the server in SSR mode,
 		 * so to ensure this only runs on the client, we need to wrap it in `if (browser)`
 		 */
-		if (browser && query !== '')
+		if (browser)
 			// To update search params in Kit, you use the goto fuction just like if you were navigating
 			goto(
-				`?${new URLSearchParams({
-					query,
-					filters: JSON.stringify(filters)
-				}).toString()}`,
+				`?${
+					query !== ''
+						? new URLSearchParams({
+								query,
+								filters: JSON.stringify(filters)
+						  }).toString()
+						: ''
+				}`,
 				{
 					keepFocus: true,
 					replaceState: true,
@@ -189,14 +264,20 @@
 				<option>{key} sort</option>
 			{/each}
 		</optgroup>
+		<optgroup label="Snowflake special filters">
+			<option>exclude letters</option>
+			<option>exclude prefixes</option>
+			<option>exclude suffixes</option>
+			<option>shuffle</option>
+		</optgroup>
 	</select>
 </p>
 <!-- Loop over all existing filters -->
-{#each filters as filter, i}
+{#each filters as f, i}
 	<p>
+		{f.type}
 		<!-- Limit filters -->
-		{#if filter.type === 'limit'}
-			{filter.filter.key}
+		{#if f.type === 'limit'}
 			<label>
 				Max
 				<input
@@ -206,7 +287,7 @@
 						// debounce is generic, but we can't provide types with ts syntax inside Sveltes HTML section. So we make a parameter of type T that then tells the rest of the fuction what type the values are.
 						type: 0,
 						callback: (value) => {
-							if (isLimitFilter(filter)) filter.filter.max = value;
+							if (filter.isLimit(f)) f.filter.max = value;
 						}
 					}}
 				/>
@@ -219,26 +300,37 @@
 					use:debounce={{
 						type: 0,
 						callback: (value) => {
-							if (isLimitFilter(filter)) filter.filter.min = value;
+							if (filter.isLimit(f)) f.filter.min = value;
 						}
 					}}
 					min="0"
 				/>
 			</label>
-		{:else}
-			{filter.filter.key}
-			{filter.filter.order}
+		{:else if f.type === 'sort'}
+			{f.filter.order}
 			<select
 				use:debounce={{
 					type: 'asc',
 					callback: (value) => {
-						if (!isLimitFilter(filter)) filter.filter.order = value;
+						if (filter.isSort(f)) f.filter.order = value;
 					}
 				}}
 			>
 				<option>asc</option>
 				<option>desc</option>
 			</select>
+		{:else if f.type === 'exclude'}
+			<label>
+				{f.filter.type}
+				<input
+					use:debounce={{
+						type: '',
+						callback: (value) => {
+							if (filter.isExclude(f)) f.filter.value = value;
+						}
+					}}
+				/>
+			</label>
 		{/if}
 		<button on:click={() => removeFilter(i)}>Remove</button>
 		<button
