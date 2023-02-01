@@ -5,30 +5,7 @@
 	import fakedata from './fakedata.json';
 	import { browser } from '$app/environment';
 	import type { PageData } from './$types';
-	type Person = (typeof fakedata.data)[0];
-	type LimitFilter = {
-		type: 'limit';
-		filter: {
-			min: number;
-			max: number;
-			key: keyof Person;
-		};
-	};
-	type SortFilter = {
-		type: 'sort';
-		filter: {
-			order: 'asc' | 'desc';
-			key: keyof Person;
-		};
-	};
-	type ExcludeFilter = {
-		type: 'exclude';
-		filter: { type: 'letter' | 'prefix' | 'suffix'; value: '' };
-	};
-	type ShuffleFilter = {
-		type: 'shuffle';
-	};
-	type Filter = SortFilter | LimitFilter | ExcludeFilter | ShuffleFilter;
+	import type { Person, Filter, ExcludeFilter, LimitFilter, ShuffleFilter, SortFilter } from '.';
 
 	// url-encoded filters loaded in +page.ts
 	export let data: PageData;
@@ -213,23 +190,17 @@
 		/** Wacky SvelteKit behaviour - this will try to run on the server in SSR mode,
 		 * so to ensure this only runs on the client, we need to wrap it in `if (browser)`
 		 */
-		if (browser)
+		if (browser) {
 			// To update search params in Kit, you use the goto fuction just like if you were navigating
-			goto(
-				`?${
-					query !== ''
-						? new URLSearchParams({
-								query,
-								filters: JSON.stringify(filters)
-						  }).toString()
-						: ''
-				}`,
-				{
-					keepFocus: true,
-					replaceState: true,
-					noScroll: true
-				}
-			);
+			const sp = new URLSearchParams();
+			if (query !== '') sp.append('query', query);
+			if (filters.length !== 0) sp.append('filters', JSON.stringify(filters));
+			goto(`?${sp.toString()}`, {
+				keepFocus: true,
+				replaceState: true,
+				noScroll: true
+			});
+		}
 	}
 </script>
 
