@@ -28,7 +28,6 @@
 					[, valid] = isNotable(variable[key]);
 				} else valid = true;
 			}
-
 			if (valid && sp) sp.append(key as string, JSON.stringify(variable[key]));
 		}
 		return [sp || new URLSearchParams(), valid];
@@ -191,7 +190,7 @@
 			{/each}
 		</select>
 	</label>
-	{#each state.limits as limit}
+	{#each state.limits as limit, i}
 		<p>
 			<label>
 				Max
@@ -221,6 +220,12 @@
 					}}
 				/>
 			</label>
+			<button
+				on:click={() => {
+					state.limits.splice(i, 1);
+					state.limits = state.limits;
+				}}>Remove</button
+			>
 		</p>
 	{/each}
 </div>
