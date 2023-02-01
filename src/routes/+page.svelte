@@ -213,12 +213,12 @@
 <label>
 	Page
 	<!-- Pagination page -->
-	<input bind:value={page} type="number" />
+	<input bind:value={page} type="number" min="1" max={Math.ceil(filtered.length / pageSize)} />
 </label>
 <label>
 	Page Size
 	<!-- Pagination page size -->
-	<input bind:value={pageSize} type="number" />
+	<input bind:value={pageSize} type="number" min="1" max={filtered.length} />
 </label>
 <p>
 	<button on:click={addFilter}>Add filter</button>
@@ -251,9 +251,11 @@
 		{#if f.type === 'limit'}
 			<label>
 				Max
+				{f.filter.key}
 				<input
 					type="number"
 					value="100"
+					min="0"
 					use:debounce={{
 						// debounce is generic, but we can't provide types with ts syntax inside Sveltes HTML section. So we make a parameter of type T that then tells the rest of the fuction what type the values are.
 						type: 0,
@@ -268,13 +270,13 @@
 				<input
 					type="number"
 					value="0"
+					min="0"
 					use:debounce={{
 						type: 0,
 						callback: (value) => {
 							if (filter.isLimit(f)) f.filter.min = value;
 						}
 					}}
-					min="0"
 				/>
 			</label>
 		{:else if f.type === 'sort'}
