@@ -339,12 +339,16 @@
 	</thead>
 	<tbody>
 		<!-- Paginate the results, Svelte is fast but updating tens of thousands of DOM nodes is too much (unless we'd use a virtual list but that's not in the scope of this project. if you're interested in that, look at https://github.com/sveltejs/svelte-virtual-list written by the completely insane Rich Harris) -->
-		{#each filtered.slice(pageSize * (page - 1), pageSize * page) as person}
-			<tr>
-				{#each Object.values(person) as value}
-					<td>{value}</td>
-				{/each}
-			</tr>
-		{/each}
+		{#if filtered.length === 0}
+			<p>No results!</p>
+		{:else}
+			{#each filtered.slice(pageSize * (page - 1), pageSize * page) as person}
+				<tr>
+					{#each Object.values(person) as value}
+						<td>{value}</td>
+					{/each}
+				</tr>
+			{/each}
+		{/if}
 	</tbody>
 </table>
